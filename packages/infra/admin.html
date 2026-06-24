@@ -95,7 +95,7 @@ body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',monospace;font-size
 <div class="cost-section" id="cost-section">
   <div class="cost-block">
     <div class="cost-label">이번 달 누적</div>
-    <div class="cost-val" id="cost-month">로딩 중…</div>
+    <div class="cost-val" id="cost-month">-</div>
   </div>
   <div class="cost-divider"></div>
   <div class="cost-block">
@@ -104,7 +104,7 @@ body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',monospace;font-size
   </div>
   <div class="cost-divider"></div>
   <div class="cost-chart-wrap" id="cost-chart"></div>
-  <div class="cost-note">5분마다 갱신 · 마지막: <span id="cost-time">-</span></div>
+  <div class="cost-note">매일 오전 10시 자동갱신 · 마지막: <span id="cost-time">-</span> · <button onclick="fetchCosts()" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:0.7rem;padding:1px 8px;cursor:pointer">지금 조회</button></div>
 </div>
 
 <div class="meta-bar">
@@ -147,7 +147,7 @@ async function tryLogin() {
     document.getElementById('gate').style.display = 'none';
     const data = await r.json();
     render(data);
-    fetchCosts();
+    // 비용은 자동 조회 안 함 (Cost Explorer $0.01/요청) — 버튼으로 수동 조회
   } catch(e) {
     err.textContent = '서버 연결 실패: ' + e.message;
   }
@@ -321,8 +321,18 @@ setInterval(() => {
   if (countdown <= 0) { countdown = 10; fetchRooms(); }
 }, 1000);
 
-// 비용은 5분마다 갱신 (Cost Explorer $0.01/요청 과금)
-setInterval(() => { if (adminToken) fetchCosts(); }, 5 * 60 * 1000);
+// 비용 조회: 매일 오전 10시 KST(= 01:00 UTC)에 1회만 자동 호출
+(function scheduleCostAt10amKST() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(1, 0, 0, 0); // 01:00 UTC = 10:00 KST
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  setTimeout(function tick() {
+    if (adminToken) fetchCosts();
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }, next.getTime() - now.getTime());
+})();
+
 </script>
 </body>
 </html>

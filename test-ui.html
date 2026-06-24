@@ -560,6 +560,17 @@ function onMsg(msg) {
       sysMsg(`${leftName}님이 방을 나갔습니다`);
       break;
     }
+    case 'ROOM_CLOSED': {
+      // 방이 삭제됨 — 재연결 금지, 세션 초기화
+      _isIntentionalClose = true;
+      clearTimeout(_reconnectTimeout);
+      _reconnectAttempts = 12;
+      if (S.ws) { S.ws.onclose = null; try { S.ws.close(); } catch {} S.ws = null; }
+      clearSession();
+      toast('🚫 방이 종료되었습니다. 로비로 이동합니다.');
+      setTimeout(resetToSetup, 2000);
+      break;
+    }
   }
 }
 

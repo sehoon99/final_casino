@@ -1,4 +1,4 @@
-import { TransactWriteCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { TransactWriteCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE } from '../room/db';
 import { broadcastToRoom, sendToConnection } from './broadcast';
 import type { WsHandler } from './types';
@@ -48,7 +48,7 @@ export const handler: WsHandler = async (event) => {
   }));
 
   // Check reconnect status + fetch room snapshot in parallel
-  const [playerRes, playersRes, gameRes] = await Promise.all([
+  const [playerRes, playersRes, gameRes, metaRes] = await Promise.all([
     ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: `PLAYER#${userId}` } })),
     ddb.send(new QueryCommand({
       TableName: TABLE,
@@ -56,7 +56,18 @@ export const handler: WsHandler = async (event) => {
       ExpressionAttributeValues: { ':pk': `ROOM#${roomId}`, ':prefix': 'PLAYER#' },
     })),
     ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: 'GAME#current' } })),
+    ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: 'META' } })),
   ]);
+
+  // Room no longer exists — clean up the CONN# records we just created and notify client
+  if (!metaRes.Item) {
+    await Promise.allSettled([
+      ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: `CONN#${connectionId}` } })),
+      ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: `CONNECTION#${connectionId}`, sk: 'META' } })),
+    ]);
+    await sendToConnection(connectionId, { type: 'ROOM_CLOSED', reason: 'not_found' }, callbackUrl);
+    return { statusCode: 200 };
+  }
 
   const isReconnect = playerRes.Item?.status === 'disconnected';
 

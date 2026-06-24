@@ -261,7 +261,9 @@ function render(data) {
   }
 
   container.innerHTML = rooms.map(room => {
-    const statusPill = room.status === 'waiting'
+    const statusPill = !room.status
+      ? '<span class="pill pill-red">⚠️ META 없음</span>'
+      : room.status === 'waiting'
       ? '<span class="pill pill-green">대기중</span>'
       : room.status === 'playing'
       ? '<span class="pill pill-blue">게임중</span>'
@@ -299,9 +301,9 @@ function render(data) {
       <div class="room-body">
         ${gameBadge}
         <div class="stat-row">
-          <div class="stat"><div class="stat-label">플레이어</div><div class="stat-value">${room.playerCount} / ${room.maxPlayers}</div></div>
+          <div class="stat"><div class="stat-label">플레이어</div><div class="stat-value">${room.playerCount} / ${room.maxPlayers ?? '?'}</div></div>
           <div class="stat"><div class="stat-label">WS 연결</div><div class="stat-value">${room.connCount}</div></div>
-          <div class="stat"><div class="stat-label">경과</div><div class="stat-value">${room.ageMinutes}분</div></div>
+          <div class="stat"><div class="stat-label">경과</div><div class="stat-value">${room.ageMinutes != null ? room.ageMinutes + '분' : '-'}</div></div>
         </div>
         <div class="player-list">${players || '<div style="color:#484f58;font-size:0.8rem;padding:6px 0">플레이어 없음</div>'}</div>
         ${connIds ? `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px">${connIds}</div>` : ''}

@@ -49,10 +49,15 @@ export const handler = async (_event: APIGatewayProxyEvent): Promise<APIGatewayP
       }
     }
 
-    // Clean up zombie rooms (no connections + all players disconnected, older than 2 min)
+    // Clean up zombie rooms
     const now = Date.now();
     const zombieIds: string[] = [];
     for (const [roomId, r] of Object.entries(rooms)) {
+      // META 없는 방 = 반쯤 삭제된 유령 방 → 즉시 정리
+      if (!r.meta) {
+        zombieIds.push(roomId);
+        continue;
+      }
       if (r.connections.length > 0) continue;
       if (r.game != null) continue; // active game — skip
       const ageMs = r.meta?.createdAt ? now - Number(r.meta.createdAt) : 0;

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java *)",
+      "Bash(npx tsx *)",
+      "Bash(taskkill //F //PID 26132)",
+      "Bash(taskkill //F //PID 38024)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -I{} taskkill //F //PID {})",
+      "Bash(aws logs describe-log-groups *)",
+      "Bash(bash build.sh)"
+    ]
+  }
+}

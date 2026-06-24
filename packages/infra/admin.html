@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Casino Night — Admin</title>
+<script src="config.js" onerror="void 0"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',monospace;font-size:13px}
+.header{background:#161b22;border-bottom:1px solid #30363d;padding:14px 24px;display:flex;align-items:center;gap:16px}
+.header h1{font-size:1.1rem;color:#f0f6fc}
+.badge{background:#21262d;border:1px solid #30363d;border-radius:6px;padding:2px 10px;font-size:0.75rem;color:#8b949e}
+.btn{background:#238636;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:0.8rem}
+.btn:hover{background:#2ea043}
+.btn-red{background:#da3633}
+.btn-red:hover{background:#f85149}
+.meta-bar{padding:10px 24px;background:#0d1117;border-bottom:1px solid #21262d;display:flex;gap:16px;align-items:center;font-size:0.78rem;color:#8b949e}
+.meta-bar span{color:#c9d1d9}
+.container{padding:20px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:16px}
+.room-card{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.room-card.active-game{border-color:#388bfd}
+.room-header{padding:12px 16px;background:#21262d;display:flex;justify-content:space-between;align-items:center}
+.room-id{font-family:monospace;font-size:0.75rem;color:#8b949e}
+.room-status{display:flex;gap:6px;align-items:center}
+.pill{border-radius:20px;padding:2px 10px;font-size:0.7rem;font-weight:700}
+.pill-green{background:#1a3a1a;color:#3fb950}
+.pill-blue{background:#0d2340;color:#58a6ff}
+.pill-red{background:#3d1212;color:#f85149}
+.pill-yellow{background:#3d3100;color:#e3b341}
+.room-body{padding:14px 16px}
+.stat-row{display:flex;gap:24px;margin-bottom:12px}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat-label{font-size:0.68rem;color:#8b949e;text-transform:uppercase;letter-spacing:.06em}
+.stat-value{font-size:1rem;font-weight:700;color:#f0f6fc}
+.player-list{border-top:1px solid #21262d;padding-top:12px}
+.player-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #161b22}
+.player-row:last-child{border-bottom:none}
+.player-avatar{width:26px;height:26px;border-radius:50%;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0}
+.player-name{flex:1;font-size:0.82rem}
+.player-bal{color:#e3b341;font-family:monospace;font-size:0.8rem}
+.player-status{font-size:0.68rem;padding:2px 6px;border-radius:10px}
+.s-active{background:#1a3a1a;color:#3fb950}
+.s-disconnected{background:#3d1212;color:#f85149}
+.s-bankrupt{background:#2d1b00;color:#e3b341}
+.conn-chip{background:#0d2340;color:#58a6ff;font-size:0.65rem;padding:2px 6px;border-radius:6px;font-family:monospace}
+.game-badge{background:#0d2340;color:#58a6ff;font-size:0.72rem;padding:4px 10px;border-radius:6px;margin-bottom:10px;display:inline-block}
+.refresh-info{color:#8b949e;font-size:0.75rem}
+.empty{padding:40px;text-align:center;color:#484f58}
+.error{padding:40px;text-align:center;color:#f85149}
+/* ── 비용 섹션 ─────────────────────────────────────── */
+.cost-section{background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.cost-block{display:flex;flex-direction:column;gap:2px}
+.cost-label{font-size:0.67rem;color:#8b949e;text-transform:uppercase;letter-spacing:.07em}
+.cost-val{font-size:1.15rem;font-weight:700;color:#e3b341;font-family:monospace}
+.cost-val.small{font-size:0.9rem}
+.cost-divider{width:1px;height:36px;background:#30363d;flex-shrink:0}
+.cost-chart-wrap{display:flex;align-items:flex-end;gap:3px;height:36px;flex:1;min-width:180px;max-width:320px}
+.cost-bar-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%}
+.cost-bar-fill{width:100%;background:#e3b341;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
+.cost-bar-date{font-size:0.55rem;color:#8b949e;white-space:nowrap}
+.cost-note{font-size:0.68rem;color:#484f58;margin-left:auto;align-self:flex-end}
+/* ── 비밀번호 게이트 ─────────────────────────────── */
+.gate{position:fixed;inset:0;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:9999}
+.gate-box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:36px 40px;width:320px;text-align:center}
+.gate-box h2{color:#f0f6fc;font-size:1.1rem;margin-bottom:8px}
+.gate-box p{color:#8b949e;font-size:0.8rem;margin-bottom:24px}
+.gate-input{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;color:#f0f6fc;font-size:0.95rem;outline:none;margin-bottom:12px}
+.gate-input:focus{border-color:#58a6ff}
+.gate-input.shake{animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.gate-btn{width:100%;background:#238636;color:#fff;border:none;border-radius:6px;padding:10px;font-size:0.9rem;cursor:pointer}
+.gate-btn:hover{background:#2ea043}
+.gate-err{color:#f85149;font-size:0.78rem;margin-top:8px;min-height:18px}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-box">
+    <h2>🔒 Admin</h2>
+    <p>Casino Night 관리자 전용 페이지입니다</p>
+    <input class="gate-input" id="gate-input" type="password" placeholder="비밀번호 입력" autocomplete="current-password">
+    <button class="gate-btn" onclick="tryLogin()">입장</button>
+    <div class="gate-err" id="gate-err"></div>
+  </div>
+</div>
+
+<div class="header">
+  <h1>🎰 Casino Night — Admin</h1>
+  <span class="badge" id="room-count">방 0개</span>
+  <span class="badge" id="player-count">플레이어 0명</span>
+  <span class="badge" id="conn-count">연결 0개</span>
+  <button class="btn" onclick="fetchRooms()">새로고침</button>
+</div>
+<div class="cost-section" id="cost-section">
+  <div class="cost-block">
+    <div class="cost-label">이번 달 누적</div>
+    <div class="cost-val" id="cost-month">로딩 중…</div>
+  </div>
+  <div class="cost-divider"></div>
+  <div class="cost-block">
+    <div class="cost-label">오늘 (진행 중)</div>
+    <div class="cost-val small" id="cost-today">-</div>
+  </div>
+  <div class="cost-divider"></div>
+  <div class="cost-chart-wrap" id="cost-chart"></div>
+  <div class="cost-note">5분마다 갱신 · 마지막: <span id="cost-time">-</span></div>
+</div>
+
+<div class="meta-bar">
+  <span class="refresh-info">자동 새로고침 <span id="countdown">10</span>초</span>
+  <span>마지막 조회: <span id="last-time">-</span></span>
+  <span>API: <span id="api-url" style="color:#58a6ff;font-family:monospace;font-size:0.7rem"></span></span>
+</div>
+
+<div class="container" id="rooms-container">
+  <div class="empty">데이터 로딩 중...</div>
+</div>
+
+<script>
+const API = window.__CASINO_CONFIG__?.api ?? 'http://localhost:3000';
+document.getElementById('api-url').textContent = API;
+
+// ── 인증 ──────────────────────────────────────────
+let adminToken = sessionStorage.getItem('admin_token') ?? '';
+
+function authHeaders() {
+  return { 'x-admin-token': adminToken };
+}
+
+async function tryLogin() {
+  const input = document.getElementById('gate-input');
+  const err   = document.getElementById('gate-err');
+  adminToken  = input.value.trim();
+  err.textContent = '';
+
+  try {
+    const r = await fetch(`${API}admin/rooms`, { headers: authHeaders() });
+    if (r.status === 401) {
+      err.textContent = '비밀번호가 틀렸습니다';
+      input.classList.add('shake');
+      setTimeout(() => input.classList.remove('shake'), 350);
+      adminToken = '';
+      return;
+    }
+    sessionStorage.setItem('admin_token', adminToken);
+    document.getElementById('gate').style.display = 'none';
+    const data = await r.json();
+    render(data);
+    fetchCosts();
+  } catch(e) {
+    err.textContent = '서버 연결 실패: ' + e.message;
+  }
+}
+
+// Enter 키로 로그인
+document.getElementById('gate-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') tryLogin();
+});
+
+// 저장된 토큰이 있으면 자동 로그인 시도
+if (adminToken) {
+  tryLogin();
+} else {
+  // 수동 입력 대기 — 자동 새로고침은 로그인 후 시작
+}
+
+const fmt = n => Number(n).toLocaleString();
+const timeAgo = ms => {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return `${s}초 전`;
+  if (s < 3600) return `${Math.floor(s/60)}분 전`;
+  return `${Math.floor(s/3600)}시간 전`;
+};
+const initials = name => (name ?? '?').slice(0,2).toUpperCase();
+const colors = ['#388bfd','#3fb950','#f78166','#d2a8ff','#ffa657','#79c0ff'];
+const avatarColor = name => colors[(name ?? '').charCodeAt(0) % colors.length];
+
+async function fetchCosts() {
+  try {
+    const r = await fetch(`${API}admin/costs`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    renderCosts(data);
+  } catch(e) {
+    document.getElementById('cost-month').textContent = '조회 실패';
+    document.getElementById('cost-today').textContent = e.message;
+  }
+}
+
+function renderCosts(data) {
+  const fmt$ = v => `$${v.toFixed(3)}`;
+  document.getElementById('cost-month').textContent = fmt$(data.total ?? 0);
+  document.getElementById('cost-today').textContent = fmt$(data.today ?? 0);
+  document.getElementById('cost-time').textContent = new Date(data.fetchedAt).toLocaleTimeString();
+
+  const daily = (data.daily ?? []).slice(-7);
+  const max = Math.max(...daily.map(d => d.amount), 0.001);
+  const chart = document.getElementById('cost-chart');
+  chart.innerHTML = daily.map(d => {
+    const pct = Math.max((d.amount / max) * 100, 3);
+    const label = d.date ? d.date.slice(5) : '';
+    return `<div class="cost-bar-item" title="${d.date}: $${d.amount}">
+      <div class="cost-bar-fill" style="height:${pct}%"></div>
+      <div class="cost-bar-date">${label}</div>
+    </div>`;
+  }).join('');
+}
+
+async function destroyRoom(roomId) {
+  if (!confirm(`방 ${roomId.slice(0,8)}…을 폭파하시겠습니까?\n연결된 모든 플레이어가 강제 퇴장됩니다.`)) return;
+  try {
+    const r = await fetch(`${API}admin/rooms/${roomId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (r.status === 401) {
+      sessionStorage.removeItem('admin_token');
+      adminToken = '';
+      document.getElementById('gate').style.display = 'flex';
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    fetchRooms();
+  } catch(e) {
+    alert('폭파 실패: ' + e.message);
+  }
+}
+
+async function fetchRooms() {
+  try {
+    const r = await fetch(`${API}admin/rooms`, { headers: authHeaders() });
+    if (r.status === 401) {
+      sessionStorage.removeItem('admin_token');
+      adminToken = '';
+      document.getElementById('gate').style.display = 'flex';
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    render(data);
+  } catch(e) {
+    document.getElementById('rooms-container').innerHTML =
+      `<div class="error">⚠️ 오류: ${e.message}<br><small>서버가 실행 중인지 확인하세요</small></div>`;
+  }
+}
+
+function render(data) {
+  const rooms = data.rooms ?? [];
+  const totalPlayers = rooms.reduce((s,r) => s + r.playerCount, 0);
+  const totalConns   = rooms.reduce((s,r) => s + r.connCount, 0);
+  document.getElementById('room-count').textContent   = `방 ${rooms.length}개`;
+  document.getElementById('player-count').textContent = `플레이어 ${totalPlayers}명`;
+  document.getElementById('conn-count').textContent   = `연결 ${totalConns}개`;
+  document.getElementById('last-time').textContent    = new Date(data.scannedAt).toLocaleTimeString();
+
+  const container = document.getElementById('rooms-container');
+  if (rooms.length === 0) {
+    container.innerHTML = '<div class="empty">활성 방 없음</div>';
+    return;
+  }
+
+  container.innerHTML = rooms.map(room => {
+    const statusPill = room.status === 'waiting'
+      ? '<span class="pill pill-green">대기중</span>'
+      : room.status === 'playing'
+      ? '<span class="pill pill-blue">게임중</span>'
+      : `<span class="pill pill-red">${room.status}</span>`;
+
+    const gameBadge = room.gameActive
+      ? `<div class="game-badge">🎮 ${room.gameId ?? '게임'} 진행 중</div>`
+      : '';
+
+    const players = (room.players ?? []).map(p => {
+      const sc = p.status === 'disconnected' ? 's-disconnected' : p.status === 'bankrupt' ? 's-bankrupt' : 's-active';
+      const statusLabel = p.status === 'disconnected' ? '연결끊김' : p.status === 'bankrupt' ? '파산' : '접속중';
+      return `<div class="player-row">
+        <div class="player-avatar" style="background:${avatarColor(p.name)}">${initials(p.name)}</div>
+        <div class="player-name">${p.name ?? p.userId}<br>
+          <span style="font-size:0.65rem;color:#8b949e">${p.userId}</span>
+        </div>
+        <span class="player-bal">${fmt(p.balance)}칩</span>
+        <span class="player-status ${sc}">${statusLabel}</span>
+      </div>`;
+    }).join('');
+
+    const connIds = (room.connections ?? []).map(c =>
+      `<span class="conn-chip">${c.slice(0,8)}…</span>`
+    ).join(' ');
+
+    return `<div class="room-card${room.gameActive?' active-game':''}">
+      <div class="room-header">
+        <span class="room-id">${room.roomId.slice(0,8)}…</span>
+        <div class="room-status">
+          ${statusPill}
+          <button class="btn btn-red" style="font-size:0.68rem;padding:2px 8px" onclick="destroyRoom('${room.roomId}')">💥 폭파</button>
+        </div>
+      </div>
+      <div class="room-body">
+        ${gameBadge}
+        <div class="stat-row">
+          <div class="stat"><div class="stat-label">플레이어</div><div class="stat-value">${room.playerCount} / ${room.maxPlayers}</div></div>
+          <div class="stat"><div class="stat-label">WS 연결</div><div class="stat-value">${room.connCount}</div></div>
+          <div class="stat"><div class="stat-label">경과</div><div class="stat-value">${room.ageMinutes}분</div></div>
+        </div>
+        <div class="player-list">${players || '<div style="color:#484f58;font-size:0.8rem;padding:6px 0">플레이어 없음</div>'}</div>
+        ${connIds ? `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px">${connIds}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 10초 자동 새로고침 (로그인 후에만 동작)
+let countdown = 10;
+setInterval(() => {
+  if (!adminToken) return;
+  countdown--;
+  document.getElementById('countdown').textContent = countdown;
+  if (countdown <= 0) { countdown = 10; fetchRooms(); }
+}, 1000);
+
+// 비용은 5분마다 갱신 (Cost Explorer $0.01/요청 과금)
+setInterval(() => { if (adminToken) fetchCosts(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>

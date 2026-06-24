@@ -1,0 +1,29 @@
+{
+  "name": "casino-platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down",
+    "dev": "npx tsx packages/backend/local-dev/server.ts",
+    "test:ui": "npx playwright test",
+    "test:ui:headed": "npx playwright test --headed"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.600.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-eventbridge": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb-streams": "^3.1075.0",
+    "@playwright/test": "^1.61.1",
+    "@types/aws-lambda": "^8.10.140",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0"
+  }
+}

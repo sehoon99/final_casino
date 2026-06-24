@@ -1,0 +1,9 @@
+node_modules/
+packages/infra/dist/
+packages/infra/.terraform/
+packages/infra/terraform.tfstate
+packages/infra/terraform.tfstate.backup
+packages/infra/.terraform.lock.hcl
+*.zip
+.env
+.env.*

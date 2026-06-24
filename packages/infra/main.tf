@@ -3,8 +3,11 @@ terraform {
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
-  # 로컬 state — 팀 사용 시 S3 backend로 전환 권장
-  # backend "s3" { bucket = "..." key = "casino/terraform.tfstate" region = "ap-northeast-2" }
+  backend "s3" {
+    bucket = "casino-tfstate-097852546028"
+    key    = "casino/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
 }
 
 provider "aws" {

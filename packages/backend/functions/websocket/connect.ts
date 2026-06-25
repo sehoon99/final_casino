@@ -129,11 +129,12 @@ export const handler: WsHandler = async (event) => {
     gameState: (gameState && Object.keys(gameState as object).length > 0) ? gameState : null,
   };
 
-  // 기존 플레이어에게도 최신 플레이어 목록을 브로드캐스트 (신규 접속자 포함)
+  // 기존 플레이어에게 최신 플레이어 목록을 브로드캐스트 (신규 접속자는 제외)
+  // ⚠️ 신규 접속자 본인에게는 여기서 보내지 않는다.
+  //    API Gateway는 $connect 실행 중에 해당 연결로의 PostToConnection을 허용하지 않아
+  //    GoneException이 발생하고, 그 핸들러가 방금 만든 연결 레코드를 삭제해버린다.
+  //    신규 접속자는 onopen 직후 GET_ROOM_STATE를 보내 $default 경로로 상태를 받는다.
   await broadcastToRoom(roomId, { ...roomSnapshot, isReconnect: false }, callbackUrl, connectionId);
-
-  // 신규 접속자에게 현재 방 스냅샷 전송
-  await sendToConnection(connectionId, { ...roomSnapshot, isReconnect }, callbackUrl, roomId);
 
   return { statusCode: 200 };
 };

@@ -8,7 +8,7 @@ locals {
 resource "aws_lambda_function" "ws_connect" {
   function_name    = "${local.prefix}-ws-connect"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/connect.zip"
   source_code_hash = filebase64sha256("${local.dist}/connect.zip")
@@ -20,7 +20,7 @@ resource "aws_lambda_function" "ws_connect" {
 resource "aws_lambda_function" "ws_disconnect" {
   function_name    = "${local.prefix}-ws-disconnect"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/disconnect.zip"
   source_code_hash = filebase64sha256("${local.dist}/disconnect.zip")
@@ -32,7 +32,7 @@ resource "aws_lambda_function" "ws_disconnect" {
 resource "aws_lambda_function" "ws_default" {
   function_name    = "${local.prefix}-ws-default"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/default.zip"
   source_code_hash = filebase64sha256("${local.dist}/default.zip")
@@ -46,7 +46,7 @@ resource "aws_lambda_function" "ws_default" {
 resource "aws_lambda_function" "room_create" {
   function_name    = "${local.prefix}-room-create"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/create.zip"
   source_code_hash = filebase64sha256("${local.dist}/create.zip")
@@ -58,7 +58,7 @@ resource "aws_lambda_function" "room_create" {
 resource "aws_lambda_function" "room_join" {
   function_name    = "${local.prefix}-room-join"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/join.zip"
   source_code_hash = filebase64sha256("${local.dist}/join.zip")
@@ -70,7 +70,7 @@ resource "aws_lambda_function" "room_join" {
 resource "aws_lambda_function" "room_leave" {
   function_name    = "${local.prefix}-room-leave"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/leave.zip"
   source_code_hash = filebase64sha256("${local.dist}/leave.zip")
@@ -84,7 +84,7 @@ resource "aws_lambda_function" "room_leave" {
 resource "aws_lambda_function" "room_janitor" {
   function_name    = "${local.prefix}-room-janitor"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/janitor.zip"
   source_code_hash = filebase64sha256("${local.dist}/janitor.zip")
@@ -96,7 +96,7 @@ resource "aws_lambda_function" "room_janitor" {
 resource "aws_lambda_function" "room_destroy" {
   function_name    = "${local.prefix}-room-destroy"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/destroy.zip"
   source_code_hash = filebase64sha256("${local.dist}/destroy.zip")
@@ -116,7 +116,7 @@ resource "aws_lambda_permission" "http_destroy" {
 resource "aws_lambda_function" "room_costs" {
   function_name    = "${local.prefix}-room-costs"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/costs.zip"
   source_code_hash = filebase64sha256("${local.dist}/costs.zip")
@@ -136,7 +136,7 @@ resource "aws_lambda_permission" "http_costs" {
 resource "aws_lambda_function" "room_admin" {
   function_name    = "${local.prefix}-room-admin"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/admin.zip"
   source_code_hash = filebase64sha256("${local.dist}/admin.zip")
@@ -158,7 +158,7 @@ resource "aws_lambda_permission" "http_admin" {
 resource "aws_lambda_function" "ttl_kick" {
   function_name    = "${local.prefix}-ttl-kick"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/ttl-kick.zip"
   source_code_hash = filebase64sha256("${local.dist}/ttl-kick.zip")
@@ -240,7 +240,7 @@ resource "aws_lambda_permission" "http_leave" {
 resource "aws_lambda_function" "alert_discord" {
   function_name    = "${local.prefix}-alert-discord"
   role             = aws_iam_role.lambda.arn
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
   handler          = "index.handler"
   filename         = "${local.dist}/alert.zip"
   source_code_hash = filebase64sha256("${local.dist}/alert.zip")

@@ -173,7 +173,7 @@ input:focus { outline: none; border-color: #388bfd; }
     <div class="setup-card">
       <h2>방 만들기</h2>
       <input type="text"   id="create-name" placeholder="닉네임" maxlength="12">
-      <input type="number" id="create-max"  placeholder="최대 인원 (2~8)" min="2" max="8" value="4">
+      <input type="number" id="create-max"  placeholder="최대 인원 (1~8)" min="1" max="8" value="4">
       <button class="btn btn-primary" onclick="createRoom()">방 만들기</button>
     </div>
     <div class="setup-card">
@@ -206,16 +206,21 @@ input:focus { outline: none; border-color: #388bfd; }
   <div class="player-panel">
     <div class="panel-title">플레이어</div>
     <div id="player-list"></div>
-    <div style="margin-top:auto;padding-top:0.5rem;display:flex;flex-direction:column;gap:0.4rem">
-      <select id="game-select" style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:0.4rem 0.5rem;color:#e6edf3;font-size:0.8rem;width:100%">
-        <option value="blackjack">🃏 블랙잭</option>
-        <option value="roulette">🎡 룰렛</option>
-        <option value="baccarat">🎴 바카라</option>
-        <option value="slots">🎰 슬롯</option>
-        <option value="hiLo">🃏 하이로</option>
-        <option value="war">⚔️ 워</option>
-      </select>
-      <button class="btn btn-gold" id="start-btn" onclick="startGame()" style="width:100%">게임 시작</button>
+    <div style="margin-top:auto;padding-top:0.5rem;display:flex;flex-direction:column;gap:0.4rem" id="lobby-ctrl">
+      <!-- 방장 전용 -->
+      <div id="host-ctrl" style="display:none;flex-direction:column;gap:0.4rem">
+        <select id="game-select" style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:0.4rem 0.5rem;color:#e6edf3;font-size:0.8rem;width:100%">
+          <option value="blackjack">🃏 블랙잭</option>
+          <option value="roulette">🎡 룰렛</option>
+          <option value="baccarat">🎴 바카라</option>
+          <option value="slots">🎰 슬롯</option>
+          <option value="hiLo">🃏 하이로</option>
+          <option value="war">⚔️ 워</option>
+        </select>
+        <button class="btn btn-gold" id="start-btn" onclick="startGame()" style="width:100%" disabled>▶ 시작</button>
+      </div>
+      <!-- 일반 플레이어 전용 -->
+      <button class="btn btn-green" id="ready-btn" onclick="toggleReady()" style="display:none;width:100%">✅ 준비하기</button>
     </div>
   </div>
 
@@ -399,10 +404,12 @@ const START_BAL = 10_000;
 
 var S = {
   uid: null, uname: null, roomId: null, ws: null,
-  players: {},       // uid → { name, balance, status }
+  hostId: null,
+  players: {},       // uid → { name, balance, status, ready }
   gameState: null,
   currentGameId: null,
   lastPayouts: {},   // uid → amount (for payout badge per player)
+  myReady: false,
 };
 var _isIntentionalClose = false;
 var _reconnectAttempts  = 0;
@@ -432,8 +439,8 @@ async function createRoom() {
   const uid = uid6();
   const r = await api('POST', '/rooms', { hostId: uid, hostName: name, maxPlayers: max });
   if (r.error) return toast('실패: ' + r.error);
-  S.uid = uid; S.uname = name; S.roomId = r.roomId;
-  S.players[uid] = { name, balance: START_BAL, status: 'active' };
+  S.uid = uid; S.uname = name; S.roomId = r.roomId; S.hostId = uid;
+  S.players[uid] = { name, balance: START_BAL, status: 'active', ready: false };
   enterGame(); connectWS();
 }
 
@@ -444,7 +451,7 @@ async function joinRoom() {
   const r = await api('POST', `/rooms/${rid}/join`, { userId: uid, userName: name });
   if (r.error) return toast('실패: ' + r.error);
   S.uid = uid; S.uname = name; S.roomId = rid;
-  S.players[uid] = { name, balance: r.balance ?? START_BAL, status: 'active' };
+  S.players[uid] = { name, balance: r.balance ?? START_BAL, status: 'active', ready: false };
   enterGame(); connectWS();
 }
 
@@ -518,9 +525,10 @@ function onMsg(msg) {
       break;
     case 'ROOM_STATE': {
       (msg.players ?? []).forEach(p => {
-        S.players[p.userId] = { name: p.name, balance: p.balance, status: p.status };
+        S.players[p.userId] = { name: p.name, balance: p.balance, status: p.status, ready: p.ready ?? false };
       });
-      renderPlayers(); renderBalance();
+      if (msg.hostId) S.hostId = msg.hostId;
+      renderPlayers(); renderLobbyControls(); renderBalance();
       if (msg.gameState && msg.gameId) {
         S.currentGameId = msg.gameId;
         const gn = { blackjack:'🃏 블랙잭', roulette:'🎡 룰렛', baccarat:'🎴 바카라', slots:'🎰 슬롯', hiLo:'🃏 하이로', war:'⚔️ 워' };
@@ -535,8 +543,8 @@ function onMsg(msg) {
       break;
     }
     case 'PLAYER_JOINED': {
-      S.players[msg.userId] = { name: msg.userName ?? msg.userId, balance: msg.balance ?? START_BAL, status: 'active' };
-      renderPlayers();
+      S.players[msg.userId] = { name: msg.userName ?? msg.userId, balance: msg.balance ?? START_BAL, status: 'active', ready: false };
+      renderPlayers(); renderLobbyControls();
       sysMsg(`${msg.userName ?? msg.userId}님이 입장했습니다 👋`);
       break;
     }
@@ -556,8 +564,21 @@ function onMsg(msg) {
     case 'PLAYER_LEFT': {
       const leftName = S.players[msg.userId]?.name ?? msg.userId;
       delete S.players[msg.userId];
-      renderPlayers();
+      renderPlayers(); renderLobbyControls();
       sysMsg(`${leftName}님이 방을 나갔습니다`);
+      break;
+    }
+    case 'PLAYER_READY': {
+      if (S.players[msg.userId]) S.players[msg.userId].ready = msg.ready;
+      if (msg.userId === S.uid) S.myReady = msg.ready;
+      renderPlayers(); renderLobbyControls();
+      break;
+    }
+    case 'HOST_TRANSFERRED': {
+      S.hostId = msg.toUserId;
+      const newHostName = S.players[msg.toUserId]?.name ?? msg.toUserId;
+      sysMsg(`👑 방장이 ${newHostName}님으로 변경됐습니다`);
+      renderPlayers(); renderLobbyControls();
       break;
     }
     case 'ROOM_CLOSED': {
@@ -574,6 +595,42 @@ function onMsg(msg) {
   }
 }
 
+// ── 로비 컨트롤 렌더링 ────────────────────────────────────────────────────
+function renderLobbyControls() {
+  if (S.currentGameId && S.gameState) return; // 게임 중에는 변경 안 함
+  const isHost = S.uid === S.hostId;
+  const hostCtrl  = el('host-ctrl');
+  const readyBtn  = el('ready-btn');
+
+  if (isHost) {
+    hostCtrl.style.display = 'flex';
+    readyBtn.style.display = 'none';
+    // 혼자이거나 모든 비방장 플레이어가 준비됐을 때 시작 버튼 활성화
+    const others = Object.entries(S.players).filter(([uid, p]) => uid !== S.uid && p.status === 'active');
+    const allReady = others.length === 0 || others.every(([, p]) => p.ready);
+    el('start-btn').disabled = !allReady;
+  } else {
+    hostCtrl.style.display = 'none';
+    readyBtn.style.display = 'block';
+    readyBtn.textContent = S.myReady ? '취소' : '✅ 준비하기';
+    readyBtn.className = S.myReady ? 'btn btn-red' : 'btn btn-green';
+    readyBtn.style.width = '100%';
+  }
+}
+
+function toggleReady() {
+  if (!wsOk()) return;
+  S.myReady = !S.myReady;
+  send({ action: 'SET_READY', payload: { ready: S.myReady } });
+  renderLobbyControls();
+}
+
+function transferHost(targetUserId) {
+  if (!wsOk() || S.uid !== S.hostId) return;
+  if (!confirm(`${S.players[targetUserId]?.name ?? targetUserId}님에게 방장을 인계하시겠습니까?`)) return;
+  send({ action: 'TRANSFER_HOST', payload: { targetUserId } });
+}
+
 // ── Game Flow ──────────────────────────────────────────────────────────────
 function startGame() {
   if (!wsOk()) return;
@@ -587,7 +644,8 @@ function onGameStarted(gs) {
   S.lastPayouts = {};
   el('lobby-overlay').style.display = 'none';
   el('game-area').classList.remove('hidden');
-  el('start-btn').disabled = false;  // 게임 중에도 종목 변경 가능하도록
+  el('host-ctrl').style.display = 'none';
+  el('ready-btn').style.display = 'none';
 
   const names = { blackjack:'🃏 블랙잭', roulette:'🎡 룰렛', baccarat:'🎴 바카라', slots:'🎰 슬롯', hiLo:'🃏 하이로', war:'⚔️ 워' };
   const label = names[S.currentGameId] ?? S.currentGameId;
@@ -775,8 +833,7 @@ function closeResult() {
   el('dealer-value').textContent = '-';
   el('dealer-label').textContent = '딜러';
   el('player-game-area').innerHTML = '';
-  el('start-btn').disabled = false;
-  if (wsOk() && S.currentGameId) {
+  if (wsOk() && S.currentGameId && S.uid === S.hostId) {
     send({ action: 'START_GAME', payload: { gameId: S.currentGameId } });
   }
   showCtrl('wait-phase');
@@ -1154,12 +1211,22 @@ function sendChat() {
 
 // ── UI ─────────────────────────────────────────────────────────────────────
 function renderPlayers() {
+  const gameActive = !!S.currentGameId && !!S.gameState;
   el('player-list').innerHTML = Object.entries(S.players).map(([uid, p]) => {
     const isMe      = uid === S.uid;
+    const isHost    = uid === S.hostId;
     const isOffline = p.status === 'disconnected';
     const pct       = Math.max(0, Math.min(100, (p.balance / START_BAL) * 100));
+    const hostBadge = isHost ? '<span style="color:#ffd700;font-size:0.65rem;font-weight:700"> 👑</span>' : '';
+    const readyBadge = !gameActive && !isHost
+      ? (p.ready ? '<span style="color:#3fb950;font-size:0.65rem"> ✅</span>' : '<span style="color:#8b949e;font-size:0.65rem"> ⏳</span>')
+      : '';
+    // 방장이 다른 플레이어에게 인계 버튼 (게임 중 아닐 때만)
+    const transferBtn = !gameActive && S.hostId === S.uid && !isMe && !isOffline
+      ? `<button onclick="transferHost('${uid}')" style="margin-left:auto;background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:0.6rem;padding:1px 5px;cursor:pointer">인계</button>`
+      : '';
     return `<div class="player-item${isMe?' me':''}${p.status==='bankrupt'?' bankrupt':''}${isOffline?' offline':''}">
-      <div class="player-name">${isMe?'👤 ':''}${esc(p.name)}${isOffline?'<span class="offline-badge">오프라인</span>':''}</div>
+      <div style="display:flex;align-items:center">${isMe?'👤 ':''}${esc(p.name)}${hostBadge}${readyBadge}${transferBtn}</div>
       <div class="player-balance">${fmt(p.balance)} 칩</div>
       <div class="bar-bg"><div class="bar" style="width:${pct}%"></div></div>
     </div>`;
@@ -1226,7 +1293,7 @@ async function leaveRoom() {
 
 function resetToSetup() {
   stopBettingCountdown();
-  S.uid = null; S.uname = null; S.roomId = null;
+  S.uid = null; S.uname = null; S.roomId = null; S.hostId = null; S.myReady = false;
   S.players = {}; S.gameState = null; S.currentGameId = null; S.lastPayouts = {};
   el('result-display').classList.add('hidden');
   el('game-area').classList.add('hidden');

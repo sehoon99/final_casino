@@ -1,7 +1,7 @@
 export const GameConfig = {
   room: {
     maxPlayers: 8,
-    minPlayers: 2,
+    minPlayers: 1,
     startingBalance: 10_000,
     maxDurationMs: 30 * 60_000,
   },

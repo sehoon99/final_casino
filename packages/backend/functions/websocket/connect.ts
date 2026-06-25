@@ -54,9 +54,10 @@ export const handler: WsHandler = async (event) => {
       TableName: TABLE,
       KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
       ExpressionAttributeValues: { ':pk': `ROOM#${roomId}`, ':prefix': 'PLAYER#' },
+      ConsistentRead: true,
     })),
     ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: 'GAME#current' } })),
-    ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: 'META' } })),
+    ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: 'META' }, ConsistentRead: true })),
   ]);
 
   // Room no longer exists — clean up the CONN# records we just created and notify client
@@ -103,8 +104,10 @@ export const handler: WsHandler = async (event) => {
     name:    item.name as string,
     balance: item.balance as number,
     status:  (isReconnect && item.userId === userId) ? 'active' : (item.status as string),
+    ready:   (item.ready as boolean) ?? false,
   }));
 
+  const meta = metaRes.Item as { hostId: string } | undefined;
   const gameRecord = gameRes.Item as { gameId: string; state: unknown } | undefined;
   const gameState  = gameRecord?.state ?? null;
 
@@ -112,6 +115,7 @@ export const handler: WsHandler = async (event) => {
   await sendToConnection(connectionId, {
     type: 'ROOM_STATE',
     players,
+    hostId:    meta?.hostId ?? null,
     gameId:    gameRecord?.gameId ?? null,
     gameState: (gameState && Object.keys(gameState as object).length > 0) ? gameState : null,
     isReconnect,

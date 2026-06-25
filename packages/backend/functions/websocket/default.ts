@@ -60,16 +60,39 @@ export const handler: WsHandler = async (event) => {
 
     case 'START_GAME': {
       const { gameId } = msg.payload as { gameId: string };
-      const engine = getGame(gameId as never);
 
-      // Fetch all active players in the room
+      // 방장 확인
+      const metaForStart = await ddb.send(new GetCommand({
+        TableName: TABLE,
+        Key: { pk: `ROOM#${conn.roomId}`, sk: 'META' },
+        ConsistentRead: true,
+      }));
+      if (!metaForStart.Item || metaForStart.Item.hostId !== conn.userId) {
+        await sendToConnection(connectionId, { type: 'ERROR', message: '방장만 게임을 시작할 수 있습니다' }, callbackUrl);
+        break;
+      }
+
+      const engine = getGame(gameId as never);
       const playersRes = await ddb.send(new QueryCommand({
         TableName: TABLE,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
         ExpressionAttributeValues: { ':pk': `ROOM#${conn.roomId}`, ':prefix': 'PLAYER#' },
+        ConsistentRead: true,
       }));
-      // RoomPlayer uses `userId`, but GameEngine expects `id` — map explicitly
-      const players: Player[] = (playersRes.Items ?? []).map((item) => ({
+      const activePlayers = (playersRes.Items ?? []).filter(p => p.status === 'active');
+
+      // 방장 혼자가 아닐 때 모든 플레이어 준비 확인
+      const nonHost = activePlayers.filter(p => p.userId !== conn.userId);
+      if (nonHost.length > 0 && nonHost.some(p => !p.ready)) {
+        await sendToConnection(connectionId, { type: 'ERROR', message: '모든 플레이어가 준비를 완료해야 합니다' }, callbackUrl);
+        break;
+      }
+      if (activePlayers.length < 1) {
+        await sendToConnection(connectionId, { type: 'ERROR', message: '플레이어가 없습니다' }, callbackUrl);
+        break;
+      }
+
+      const players: Player[] = activePlayers.map((item) => ({
         id:            item.userId as string,
         name:          item.name as string,
         balance:       item.balance as number,
@@ -77,10 +100,6 @@ export const handler: WsHandler = async (event) => {
         currentGameId: (item.currentGameId as Player['currentGameId']) ?? null,
         lastActionAt:  (item.lastActionAt as number) ?? Date.now(),
       }));
-      if (players.length < engine.minPlayers) {
-        await sendToConnection(connectionId, { type: 'ERROR', message: 'Not enough players' }, callbackUrl);
-        break;
-      }
 
       const state = engine.initialize(players, {});
       state.roomId = conn.roomId;
@@ -89,8 +108,47 @@ export const handler: WsHandler = async (event) => {
         TableName: TABLE,
         Item: { pk: `ROOM#${conn.roomId}`, sk: 'GAME#current', gameId, state },
       }));
-
       await broadcastToRoom(conn.roomId, { type: 'GAME_STARTED', gameId, state }, callbackUrl);
+      break;
+    }
+
+    case 'SET_READY': {
+      const { ready } = msg.payload as { ready: boolean };
+      await ddb.send(new UpdateCommand({
+        TableName: TABLE,
+        Key: { pk: `ROOM#${conn.roomId}`, sk: `PLAYER#${conn.userId}` },
+        UpdateExpression: 'SET ready = :r',
+        ExpressionAttributeValues: { ':r': ready },
+      }));
+      await broadcastToRoom(conn.roomId, {
+        type: 'PLAYER_READY',
+        userId: conn.userId,
+        ready,
+      }, callbackUrl);
+      break;
+    }
+
+    case 'TRANSFER_HOST': {
+      const { targetUserId } = msg.payload as { targetUserId: string };
+      const metaForTransfer = await ddb.send(new GetCommand({
+        TableName: TABLE,
+        Key: { pk: `ROOM#${conn.roomId}`, sk: 'META' },
+      }));
+      if (!metaForTransfer.Item || metaForTransfer.Item.hostId !== conn.userId) {
+        await sendToConnection(connectionId, { type: 'ERROR', message: '방장만 인계할 수 있습니다' }, callbackUrl);
+        break;
+      }
+      await ddb.send(new UpdateCommand({
+        TableName: TABLE,
+        Key: { pk: `ROOM#${conn.roomId}`, sk: 'META' },
+        UpdateExpression: 'SET hostId = :h',
+        ExpressionAttributeValues: { ':h': targetUserId },
+      }));
+      await broadcastToRoom(conn.roomId, {
+        type: 'HOST_TRANSFERRED',
+        fromUserId: conn.userId,
+        toUserId: targetUserId,
+      }, callbackUrl);
       break;
     }
 

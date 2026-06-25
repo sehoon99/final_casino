@@ -2,6 +2,7 @@ import { GetCommand, DeleteCommand, UpdateCommand, QueryCommand } from '@aws-sdk
 import { ddb, TABLE } from '../room/db';
 import { deleteRoom } from '../room/cleanup';
 import { broadcastToRoom } from './broadcast';
+import { logger } from '../logger';
 import type { WsHandler } from './types';
 
 export const handler: WsHandler = async (event) => {
@@ -15,10 +16,22 @@ export const handler: WsHandler = async (event) => {
     Key: { pk: `CONNECTION#${connectionId}`, sk: 'META' },
   }));
 
-  const conn = res.Item as { roomId: string; userId: string; userName: string } | undefined;
+  const conn = res.Item as { roomId: string; userId: string; userName: string; connectedAt?: number } | undefined;
   if (!conn) return { statusCode: 200 };
 
   const { roomId, userId, userName } = conn;
+  const sessionMs = conn.connectedAt ? Date.now() - conn.connectedAt : null;
+  logger.info('플레이어 퇴장', {
+    userId,
+    roomId,
+    connId: connectionId,
+    sessionSec: sessionMs != null ? Math.round(sessionMs / 1000) : undefined,
+  });
+  logger.metric('session_end', {
+    userId,
+    roomId,
+    sessionSec: sessionMs != null ? Math.round(sessionMs / 1000) : undefined,
+  });
 
   // Remove connection records
   await Promise.all([

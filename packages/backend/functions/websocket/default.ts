@@ -2,6 +2,7 @@ import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/li
 import { ddb, TABLE } from '../room/db';
 import { broadcastToRoom, sendToConnection } from './broadcast';
 import { getGame } from '../games/_engine/GameEngine';
+import { logger } from '../logger';
 import type { GameState, Player, Payout } from '../../../shared/src/types';
 import type { WsHandler } from './types';
 
@@ -28,7 +29,10 @@ export const handler: WsHandler = async (event) => {
     Key: { pk: `CONNECTION#${connectionId}`, sk: 'META' },
   }));
   const conn = connRes.Item as ConnMeta | undefined;
-  if (!conn) return { statusCode: 401 };
+  if (!conn) {
+    logger.warn('연결 메타 없음 — 401 반환', { connId: connectionId });
+    return { statusCode: 401 };
+  }
 
   const msg = JSON.parse(event.body ?? '{}') as InMessage;
 
@@ -68,6 +72,7 @@ export const handler: WsHandler = async (event) => {
         ConsistentRead: true,
       }));
       if (!metaForStart.Item || metaForStart.Item.hostId !== conn.userId) {
+        logger.warn('START_GAME 권한 없음', { userId: conn.userId, roomId: conn.roomId, action: 'START_GAME', hostId: metaForStart.Item?.hostId });
         await sendToConnection(connectionId, { type: 'ERROR', message: '방장만 게임을 시작할 수 있습니다' }, callbackUrl);
         break;
       }
@@ -84,6 +89,7 @@ export const handler: WsHandler = async (event) => {
       // 방장 혼자가 아닐 때 모든 플레이어 준비 확인
       const nonHost = activePlayers.filter(p => p.userId !== conn.userId);
       if (nonHost.length > 0 && nonHost.some(p => !p.ready)) {
+        logger.warn('START_GAME 준비 미완료', { userId: conn.userId, roomId: conn.roomId, action: 'START_GAME', notReadyCount: nonHost.filter(p => !p.ready).length });
         await sendToConnection(connectionId, { type: 'ERROR', message: '모든 플레이어가 준비를 완료해야 합니다' }, callbackUrl);
         break;
       }
@@ -103,6 +109,9 @@ export const handler: WsHandler = async (event) => {
 
       const state = engine.initialize(players, {});
       state.roomId = conn.roomId;
+
+      logger.info('게임 시작', { userId: conn.userId, roomId: conn.roomId, action: 'START_GAME', gameId, playerCount: activePlayers.length });
+      logger.metric('game_start', { userId: conn.userId, roomId: conn.roomId, gameId, playerCount: activePlayers.length });
 
       await ddb.send(new PutCommand({
         TableName: TABLE,
@@ -183,7 +192,8 @@ export const handler: WsHandler = async (event) => {
 
         if (engine.isRoundOver(newState)) {
           const payouts = engine.calculatePayouts(newState);
-          console.log('[ROUND_OVER] payouts:', JSON.stringify(payouts));
+          logger.info('라운드 종료', { userId: conn.userId, roomId: conn.roomId, gameId: record.gameId });
+          logger.metric('game_end', { userId: conn.userId, roomId: conn.roomId, gameId: record.gameId });
           await applyPayouts(conn.roomId, payouts);
           await broadcastToRoom(conn.roomId, { type: 'ROUND_OVER', payouts, state: newState }, callbackUrl);
           await ddb.send(new PutCommand({
@@ -198,7 +208,7 @@ export const handler: WsHandler = async (event) => {
           await broadcastToRoom(conn.roomId, { type: 'GAME_STATE', state: newState }, callbackUrl);
         }
       } catch (err) {
-        console.error('[GAME_ACTION] error:', err);
+        logger.error('GAME_ACTION 처리 실패', { userId: conn.userId, roomId: conn.roomId, action: 'GAME_ACTION' }, err);
         await sendToConnection(connectionId, { type: 'ERROR', message: String(err) }, callbackUrl);
       }
       break;

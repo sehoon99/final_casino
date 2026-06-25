@@ -4,6 +4,7 @@ export interface WsEvent {
     routeKey: '$connect' | '$disconnect' | '$default';
     stage: string;
     domainName: string;
+    identity?: { sourceIp?: string };
   };
   queryStringParameters?: Record<string, string> | null;
   body?: string | null;

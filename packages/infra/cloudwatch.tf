@@ -176,6 +176,148 @@ resource "aws_cloudwatch_dashboard" "casino" {
           ]
         }
       },
+
+      # ════════════════════════════════════════════════════════════════
+      # ANALYTICS (Logs Insights) — y=24 부터
+      # ════════════════════════════════════════════════════════════════
+
+      # ── 섹션 제목 ────────────────────────────────────────────────────
+      {
+        type  = "text"
+        x     = 0; y = 24; width = 24; height = 1
+        properties = { markdown = "## 📊 사용자 분석 (Logs Insights)" }
+      },
+
+      # ── 일간 활성 사용자(DAU) ──────────────────────────────────────
+      {
+        type  = "log"
+        x     = 0; y = 25; width = 8; height = 6
+        properties = {
+          title  = "DAU (고유 사용자 / 일)"
+          region = local.region
+          view   = "bar"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-connect'
+            | filter level = "METRIC" and message = "session_start"
+            | stats count_distinct(userId) as dau by bin(1d)
+          QUERY
+        }
+      },
+
+      # ── 시간대별 접속 분포 ─────────────────────────────────────────
+      {
+        type  = "log"
+        x     = 8; y = 25; width = 8; height = 6
+        properties = {
+          title  = "시간대별 접속 (UTC)"
+          region = local.region
+          view   = "bar"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-connect'
+            | filter level = "METRIC" and message = "session_start"
+            | stats count(*) as sessions by datefloor(1h)
+          QUERY
+        }
+      },
+
+      # ── 국가별 접속 TOP 10 ─────────────────────────────────────────
+      {
+        type  = "log"
+        x     = 16; y = 25; width = 8; height = 6
+        properties = {
+          title  = "국가별 접속 TOP 10"
+          region = local.region
+          view   = "table"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-connect'
+            | filter level = "METRIC" and message = "session_start" and ispresent(countryCode)
+            | stats count(*) as sessions by countryCode, country
+            | sort sessions desc
+            | limit 10
+          QUERY
+        }
+      },
+
+      # ── 게임별 플레이 횟수 ─────────────────────────────────────────
+      {
+        type  = "log"
+        x     = 0; y = 31; width = 8; height = 6
+        properties = {
+          title  = "게임별 플레이 횟수"
+          region = local.region
+          view   = "pie"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-default'
+            | filter level = "METRIC" and message = "game_start"
+            | stats count(*) as plays by gameId
+            | sort plays desc
+          QUERY
+        }
+      },
+
+      # ── 평균 세션 길이 (분) ────────────────────────────────────────
+      {
+        type  = "log"
+        x     = 8; y = 31; width = 8; height = 6
+        properties = {
+          title  = "평균 세션 길이 (초)"
+          region = local.region
+          view   = "table"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-disconnect'
+            | filter level = "METRIC" and message = "session_end" and ispresent(sessionSec)
+            | stats avg(sessionSec) as avgSec, max(sessionSec) as maxSec, count(*) as sessions
+          QUERY
+        }
+      },
+
+      # ── 총 방 생성 수 & 플레이어 수 추이 ──────────────────────────
+      {
+        type  = "log"
+        x     = 16; y = 31; width = 8; height = 6
+        properties = {
+          title  = "방 생성 추이 (일별)"
+          region = local.region
+          view   = "bar"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-room-create'
+            | filter level = "METRIC" and message = "room_create"
+            | stats count(*) as rooms by bin(1d)
+          QUERY
+        }
+      },
+
+      # ── 주간 신규 사용자 (WAU) ────────────────────────────────────
+      {
+        type  = "log"
+        x     = 0; y = 37; width = 12; height = 6
+        properties = {
+          title  = "WAU (주간 고유 사용자)"
+          region = local.region
+          view   = "bar"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-connect'
+            | filter level = "METRIC" and message = "session_start"
+            | stats count_distinct(userId) as wau by bin(7d)
+          QUERY
+        }
+      },
+
+      # ── 에러 발생 추이 ─────────────────────────────────────────────
+      {
+        type  = "log"
+        x     = 12; y = 37; width = 12; height = 6
+        properties = {
+          title  = "에러 발생 추이 (일별)"
+          region = local.region
+          view   = "bar"
+          query  = <<-QUERY
+            SOURCE '/aws/lambda/${local.prefix}-ws-connect', '/aws/lambda/${local.prefix}-ws-default', '/aws/lambda/${local.prefix}-ws-disconnect'
+            | filter level = "ERROR"
+            | stats count(*) as errors by bin(1d)
+          QUERY
+        }
+      },
     ]
   })
 }

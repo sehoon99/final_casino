@@ -2,6 +2,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE } from './db';
 import { publishEvent } from './events';
+import { logger } from '../logger';
 import { GameConfig } from '../../../../config/game-config';
 import type { RoomMeta, RoomPlayer } from './types';
 
@@ -64,6 +65,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ],
     }));
 
+    logger.metric('room_create', { userId: hostId, roomId, playerCount: maxPlayers });
     await publishEvent('ROOM_CREATED', { roomId, hostId });
 
     return {

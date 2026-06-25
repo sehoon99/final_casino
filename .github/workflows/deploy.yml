@@ -51,6 +51,7 @@ jobs:
 
       - name: Discord 배포 알림
         if: always()
+        continue-on-error: true   # 알림 실패가 배포 상태에 영향 주지 않도록
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           JOB_STATUS: ${{ job.status }}
@@ -82,11 +83,14 @@ jobs:
           if not webhook:
             print('DISCORD_WEBHOOK not set, skipping')
           else:
-            req = urllib.request.Request(
-              webhook,
-              json.dumps(payload).encode(),
-              {'Content-Type': 'application/json'},
-            )
-            urllib.request.urlopen(req)
-            print('Discord notification sent:', status)
+            try:
+              req = urllib.request.Request(
+                webhook,
+                json.dumps(payload).encode(),
+                {'Content-Type': 'application/json'},
+              )
+              urllib.request.urlopen(req)
+              print('Discord notification sent:', status)
+            except Exception as e:
+              print(f'Discord notification failed (non-fatal): {e}')
           PYEOF

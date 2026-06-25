@@ -21,11 +21,17 @@ async function postToOne(
   try {
     await api.send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: data }));
   } catch (err) {
-    if ((err as { name?: string }).name === 'GoneException') {
+    const name = (err as { name?: string }).name;
+    if (name === 'GoneException') {
       await Promise.all([
         ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: `CONNECTION#${connectionId}`, sk: 'META' } })),
-        ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: `CONN#${connectionId}` } })),
+        roomId
+          ? ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: `ROOM#${roomId}`, sk: `CONN#${connectionId}` } }))
+          : Promise.resolve(),
       ]);
+    } else {
+      // 403/410 외 오류 — 권한 문제, callbackUrl 오류 등을 감지할 수 있도록 로그 출력
+      console.error('[broadcast] postToOne failed', { connectionId, roomId, callbackUrl, error: name, msg: String(err) });
     }
   }
 }
@@ -57,7 +63,8 @@ export async function sendToConnection(
   connectionId: string,
   payload: unknown,
   callbackUrl: string,
+  roomId = '',
 ): Promise<void> {
   const data = Buffer.from(JSON.stringify(payload));
-  await postToOne(connectionId, '', data, callbackUrl);
+  await postToOne(connectionId, roomId, data, callbackUrl);
 }

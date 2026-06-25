@@ -133,7 +133,7 @@ export const handler: WsHandler = async (event) => {
   await broadcastToRoom(roomId, { ...roomSnapshot, isReconnect: false }, callbackUrl, connectionId);
 
   // 신규 접속자에게 현재 방 스냅샷 전송
-  await sendToConnection(connectionId, { ...roomSnapshot, isReconnect }, callbackUrl);
+  await sendToConnection(connectionId, { ...roomSnapshot, isReconnect }, callbackUrl, roomId);
 
   return { statusCode: 200 };
 };

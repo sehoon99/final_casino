@@ -27,6 +27,7 @@ export const handler: WsHandler = async (event) => {
   const connRes = await ddb.send(new GetCommand({
     TableName: TABLE,
     Key: { pk: `CONNECTION#${connectionId}`, sk: 'META' },
+    ConsistentRead: true,  // $connect 직후 메시지 도착 시 eventual consistency 방지
   }));
   const conn = connRes.Item as ConnMeta | undefined;
   if (!conn) {
@@ -47,6 +48,38 @@ export const handler: WsHandler = async (event) => {
     : Promise.resolve();
 
   switch (msg.action) {
+    case 'GET_ROOM_STATE': {
+      // 클라이언트가 연결 직후 명시적으로 방 상태를 요청할 때 사용 (ROOM_STATE 수신 실패 fallback)
+      const [gsPlayersRes, gsMetaRes, gsGameRes] = await Promise.all([
+        ddb.send(new QueryCommand({
+          TableName: TABLE,
+          KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
+          ExpressionAttributeValues: { ':pk': `ROOM#${conn.roomId}`, ':prefix': 'PLAYER#' },
+          ConsistentRead: true,
+        })),
+        ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${conn.roomId}`, sk: 'META' }, ConsistentRead: true })),
+        ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `ROOM#${conn.roomId}`, sk: 'GAME#current' } })),
+      ]);
+      const gsMeta = gsMetaRes.Item as { hostId: string } | undefined;
+      const gsGame = gsGameRes.Item as { gameId: string; state: unknown } | undefined;
+      const gsPlayers = (gsPlayersRes.Items ?? []).map(item => ({
+        userId:  item.userId as string,
+        name:    item.name as string,
+        balance: item.balance as number,
+        status:  item.status as string,
+        ready:   (item.ready as boolean) ?? false,
+      }));
+      await sendToConnection(connectionId, {
+        type: 'ROOM_STATE',
+        players: gsPlayers,
+        hostId:  gsMeta?.hostId ?? null,
+        gameId:  gsGame?.gameId ?? null,
+        gameState: (gsGame?.state && Object.keys(gsGame.state as object).length > 0) ? gsGame.state : null,
+        isReconnect: false,
+      }, callbackUrl, conn.roomId);
+      break;
+    }
+
     case 'PING': {
       await sendToConnection(connectionId, { type: 'PONG' }, callbackUrl);
       break;

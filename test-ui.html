@@ -474,6 +474,9 @@ function connectWS() {
     clearTimeout(_reconnectTimeout);
     setStatus('연결됨 ✅');
     sysMsg(wasReconnect ? '재연결되었습니다 ✅' : '서버에 연결되었습니다');
+    // $connect Lambda가 이미 ROOM_STATE를 전송하지만, 수신 실패 대비용 fallback
+    // ConsistentRead 기반으로 현재 방 상태를 다시 요청
+    setTimeout(() => { if (wsOk()) send({ action: 'GET_ROOM_STATE' }); }, 800);
   };
   S.ws.onclose = () => {
     if (_isIntentionalClose) { _isIntentionalClose = false; return; }
@@ -524,6 +527,7 @@ function onMsg(msg) {
       toast('⚠️ ' + msg.message);
       break;
     case 'ROOM_STATE': {
+      console.log('[ROOM_STATE]', { players: msg.players?.map(p => p.name), hostId: msg.hostId, myUid: S.uid });
       (msg.players ?? []).forEach(p => {
         S.players[p.userId] = { name: p.name, balance: p.balance, status: p.status, ready: p.ready ?? false };
       });

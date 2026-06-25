@@ -262,8 +262,6 @@ resource "aws_lambda_permission" "cwlogs_alert" {
   source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.prefix}-*:*"
 }
 
-data "aws_caller_identity" "current" {}
-
 # 모든 Lambda 로그 그룹 → alert Lambda 구독 필터
 locals {
   monitored_functions = [

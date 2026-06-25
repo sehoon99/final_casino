@@ -48,6 +48,7 @@ bundle "janitor"    "$BACKEND/functions/room/janitor.ts"
 bundle "destroy"    "$BACKEND/functions/room/destroy.ts"
 # @aws-sdk/client-cost-explorer은 Node 20 Lambda 런타임 내장 → 번들 제외
 bundle "costs"      "$BACKEND/functions/room/costs.ts" "--external:@aws-sdk/client-cost-explorer"
+bundle "alert"      "$BACKEND/functions/alert/discord.ts"
 
 echo ""
 echo "✅ Build complete → packages/infra/dist/"

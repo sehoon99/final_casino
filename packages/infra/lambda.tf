@@ -234,3 +234,56 @@ resource "aws_lambda_permission" "http_leave" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*"
 }
+
+# ── Discord Error Alert Lambda ────────────────────────────────────────────
+
+resource "aws_lambda_function" "alert_discord" {
+  function_name    = "${local.prefix}-alert-discord"
+  role             = aws_iam_role.lambda.arn
+  runtime          = "nodejs20.x"
+  handler          = "index.handler"
+  filename         = "${local.dist}/alert.zip"
+  source_code_hash = filebase64sha256("${local.dist}/alert.zip")
+  timeout          = 15
+  environment {
+    variables = {
+      DISCORD_WEBHOOK_URL = var.discord_webhook_url
+    }
+  }
+  tags = local.tags
+}
+
+# CloudWatch Logs → alert Lambda 실행 권한
+resource "aws_lambda_permission" "cwlogs_alert" {
+  statement_id  = "AllowCloudWatchLogs"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.alert_discord.function_name
+  principal     = "logs.amazonaws.com"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.prefix}-*:*"
+}
+
+data "aws_caller_identity" "current" {}
+
+# 모든 Lambda 로그 그룹 → alert Lambda 구독 필터
+locals {
+  monitored_functions = [
+    aws_lambda_function.ws_connect.function_name,
+    aws_lambda_function.ws_disconnect.function_name,
+    aws_lambda_function.ws_default.function_name,
+    aws_lambda_function.room_create.function_name,
+    aws_lambda_function.room_join.function_name,
+    aws_lambda_function.room_leave.function_name,
+    aws_lambda_function.room_destroy.function_name,
+    aws_lambda_function.room_janitor.function_name,
+    aws_lambda_function.ttl_kick.function_name,
+  ]
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "alert" {
+  for_each        = toset(local.monitored_functions)
+  name            = "error-to-discord"
+  log_group_name  = "/aws/lambda/${each.value}"
+  filter_pattern  = "?ERROR ?Error ?\"Task timed out\""
+  destination_arn = aws_lambda_function.alert_discord.arn
+  depends_on      = [aws_lambda_permission.cwlogs_alert]
+}

@@ -111,15 +111,19 @@ export const handler: WsHandler = async (event) => {
   const gameRecord = gameRes.Item as { gameId: string; state: unknown } | undefined;
   const gameState  = gameRecord?.state ?? null;
 
-  // Send current room snapshot to the connecting player
-  await sendToConnection(connectionId, {
-    type: 'ROOM_STATE',
+  const roomSnapshot = {
+    type: 'ROOM_STATE' as const,
     players,
     hostId:    meta?.hostId ?? null,
     gameId:    gameRecord?.gameId ?? null,
     gameState: (gameState && Object.keys(gameState as object).length > 0) ? gameState : null,
-    isReconnect,
-  }, callbackUrl);
+  };
+
+  // 기존 플레이어에게도 최신 플레이어 목록을 브로드캐스트 (신규 접속자 포함)
+  await broadcastToRoom(roomId, { ...roomSnapshot, isReconnect: false }, callbackUrl, connectionId);
+
+  // 신규 접속자에게 현재 방 스냅샷 전송
+  await sendToConnection(connectionId, { ...roomSnapshot, isReconnect }, callbackUrl);
 
   return { statusCode: 200 };
 };

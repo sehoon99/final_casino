@@ -43,7 +43,50 @@ jobs:
         working-directory: packages/infra
         run: terraform apply -auto-approve
         env:
-          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION:    ap-northeast-2
-          TF_VAR_admin_token:    ${{ secrets.ADMIN_TOKEN }}
+          AWS_ACCESS_KEY_ID:          ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY:      ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:         ap-northeast-2
+          TF_VAR_admin_token:         ${{ secrets.ADMIN_TOKEN }}
+          TF_VAR_discord_webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Discord 배포 알림
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          JOB_STATUS: ${{ job.status }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PYEOF'
+          import urllib.request, json, os
+          status = os.environ['JOB_STATUS']
+          ok     = status == 'success'
+          title  = '✅ 배포 성공' if ok else f'❌ 배포 실패 ({status})'
+          color  = 3066993 if ok else 15158332
+          commit = os.environ['COMMIT_MSG'].split('\n')[0][:200]
+          payload = {
+            'embeds': [{
+              'title': title,
+              'color': color,
+              'fields': [
+                {'name': '커밋', 'value': commit, 'inline': False},
+                {'name': '실행자', 'value': os.environ['ACTOR'], 'inline': True},
+                {'name': '브랜치', 'value': os.environ['REF'], 'inline': True},
+              ],
+              'footer': {'text': os.environ['RUN_URL']},
+            }]
+          }
+          webhook = os.environ.get('DISCORD_WEBHOOK', '')
+          if not webhook:
+            print('DISCORD_WEBHOOK not set, skipping')
+          else:
+            req = urllib.request.Request(
+              webhook,
+              json.dumps(payload).encode(),
+              {'Content-Type': 'application/json'},
+            )
+            urllib.request.urlopen(req)
+            print('Discord notification sent:', status)
+          PYEOF

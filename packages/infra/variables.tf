@@ -19,3 +19,10 @@ variable "admin_token" {
   default     = "casino159"
   sensitive   = true
 }
+
+variable "discord_webhook_url" {
+  description = "Discord webhook URL for error alerts"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

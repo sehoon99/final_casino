@@ -461,7 +461,7 @@ function enterGame() {
   el('badge-rid').textContent = S.roomId.slice(0, 8) + '...';
   el('room-id-box').textContent = S.roomId;
   saveSession();
-  renderPlayers(); renderBalance();
+  renderPlayers(); renderLobbyControls(); renderBalance();
 }
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
@@ -527,7 +527,11 @@ function onMsg(msg) {
       (msg.players ?? []).forEach(p => {
         S.players[p.userId] = { name: p.name, balance: p.balance, status: p.status, ready: p.ready ?? false };
       });
-      if (msg.hostId) S.hostId = msg.hostId;
+      // hostId는 항상 서버 값으로 덮어씀 (null이면 기존 값 유지)
+      if (msg.hostId != null) S.hostId = msg.hostId;
+      // 내 준비 상태를 서버 기준으로 동기화
+      const myData = (msg.players ?? []).find(p => p.userId === S.uid);
+      if (myData) S.myReady = myData.ready ?? false;
       renderPlayers(); renderLobbyControls(); renderBalance();
       if (msg.gameState && msg.gameId) {
         S.currentGameId = msg.gameId;
@@ -598,14 +602,20 @@ function onMsg(msg) {
 // ── 로비 컨트롤 렌더링 ────────────────────────────────────────────────────
 function renderLobbyControls() {
   if (S.currentGameId && S.gameState) return; // 게임 중에는 변경 안 함
-  const isHost = S.uid === S.hostId;
-  const hostCtrl  = el('host-ctrl');
-  const readyBtn  = el('ready-btn');
+  const hostCtrl = el('host-ctrl');
+  const readyBtn = el('ready-btn');
 
+  // hostId가 아직 서버에서 받지 못한 경우 — 둘 다 숨김 (ROOM_STATE 수신 후 재호출됨)
+  if (!S.hostId) {
+    hostCtrl.style.display = 'none';
+    readyBtn.style.display = 'none';
+    return;
+  }
+
+  const isHost = S.uid === S.hostId;
   if (isHost) {
     hostCtrl.style.display = 'flex';
     readyBtn.style.display = 'none';
-    // 혼자이거나 모든 비방장 플레이어가 준비됐을 때 시작 버튼 활성화
     const others = Object.entries(S.players).filter(([uid, p]) => uid !== S.uid && p.status === 'active');
     const allReady = others.length === 0 || others.every(([, p]) => p.ready);
     el('start-btn').disabled = !allReady;
@@ -1309,19 +1319,9 @@ function resetToSetup() {
   el('setup-screen').style.display = 'flex';
 }
 
-// ── 페이지 로드: 저장된 세션 복원 ─────────────────────────────────────────
+// 페이지 로드 시 항상 로비(설정 화면)에서 시작 — 자동 세션 복원 없음
 window.addEventListener('load', () => {
-  try {
-    const raw = localStorage.getItem('casino_night_session');
-    if (!raw) return;
-    const sess = JSON.parse(raw);
-    if (!sess.uid || !sess.uname || !sess.roomId) return;
-    S.uid = sess.uid; S.uname = sess.uname; S.roomId = sess.roomId;
-    S.players[sess.uid] = { name: sess.uname, balance: sess.balance ?? START_BAL, status: 'active' };
-    enterGame();
-    sysMsg('이전 세션 복원 중...');
-    connectWS();
-  } catch {}
+  clearSession();
 });
 </script>
 </body>
